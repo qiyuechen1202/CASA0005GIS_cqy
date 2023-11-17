@@ -1,0 +1,145 @@
+lib`{r} #step for using github #1.scan for changes #2.stage them ready for committing #3.commit the changes #4.push the changes to your GitHub repo` \# 4.5.4 Create a new version control in RStudio
+
+```{r}
+#an easier way to set up Git and GitHub with your project at the beginning
+# copy the code of you repository:Under Set up your GitHub we made a repository on GitHub. Copy that URL.
+# Open RStudio > File New Project > Version Control > Git
+```
+
+#4.5.3.3 Start your Git
+
+```{r}
+# the step to create the connection between the local and remote
+#in the console 
+#step1 Configure your Git
+#library(usethis)
+# edit_git_config()
+
+#The edit_git_config() function in usethis provides a convenient way to open and edit your Git configuration file, typically the user-level or global configuration.(get your user name and email)
+
+# A more easy way to open git
+#  use_git()function from usethis package
+
+```
+
+# 4.5.3.4 Connect Git to GitHub
+
+```{r}
+# create a token
+#in the console 
+#function create_github_token() from the usethis package
+# other ways: GitHub > settings > Developer settings > personal access tokens > generate new token.
+
+# to store this token in Git 
+#gitcreds package > install and load it 
+# then use the function gitcreds_set() > copy your token in.
+```
+
+#4.5.7 Commiting to Git
+
+```{r}
+# 1 saving the file
+# 2. right top:  ‘commit’ or create a save point for our work on git.
+# 3.Stage the changes, add a commit message
+```
+
+#4.5.8 Push to Github
+
+```{r}
+#the function use_github() in the console and a new GitHub repo will appear using the name of your project!
+
+# push bottoms to submit
+```
+
+#4.5.9 Pull from GitHub
+
+```{r}
+#any changes to the global repo and bring them into your local repo.
+# github > click on your test file > edit this file
+# Add a line of code or a comment
+# click the Pull bottom on the right top side
+```
+
+# problems
+
+```{r}
+#let’s check your local repository (Git) is connected to a remote one (GitHub).
+# in the console
+#git remote -v
+
+# If you need to set the remote repo use:
+# git remote add origin
+
+# Check the current branch in RStudio (and Git) 
+# git branch -vv
+
+# If you can’t see origin/main then set it using the following code. 
+# git branch -M main
+# git push -u origin main
+# first line below will change it to main — which is required to match with the remote
+
+# If you need to change the URL of your GitHub
+# git remote set-url origin [enter your cloned URL from GitHUB here]
+```
+
+#4.5.12 Fork a repository
+
+```{r}
+#A Fork in GitHub is a copy of someone else’s repository to your own GitHub account. 
+```
+
+#4.5.13 Branches
+
+```{r}
+#Go to the test repository you just forked on github. Click the branch drop down and type in the name for a new branch.
+# click the file and make some changes > commit change
+
+# Create a pull request to the main branch.
+# 1.Click New pull request.(Here we are doing a pull request for ourselves — from our example branch to our main.)
+# 2. At the top you will see the branches that are being compared — the base defaults to githubs example repository, change it to yours. (Select squash and merge > confirm squash and merge. This means that all our commits on the exmaple branch and squashed into one.
+#这意味着我们在 exmaple 分支上的所有提交都被压入一个分支，因为我们只有一个分支，所以这并不重要，但将来可能会有用。)
+
+# Go back to your main branch repository and you should see the changes from the example branch have been merged.
+
+```
+
+# 4.5.13.1 Git commands
+
+```{r}
+#use shell to control Git then you can. If you have a large project RStudio sometimes has limits on filename length (e.g. this might occur with a book, like this one). 
+
+# To get around this you can use the following commands:
+# git add . to stage all files
+# git commit -m "commit comment" to commit all the staged files
+# git push to push the commited files to the remote
+```
+
+# 4.6.1 HTML
+
+```{r}
+# insert the code
+library(terra)
+library(here)
+jan<-terra::rast(here("prac3_data", "wc2.1_5m_tavg_01.tif"))
+```
+
+#4.6.3 Shortcuts
+
+```{r}
+#New code chunk CTRL + ALT + i
+#New comment in code CTRL + SHIFT + c
+#Align code consistently CTRL+i 跳到下一行
+
+#？？？？
+#Format ugly code to nice looking code CTRL + ALT + A 将难看的代码格式化为美观的代码
+#Insert section label which is fold-able and navigable — this only works in a .R file not a .Rmd but is still useful CTRL + SHIFT + R
+```
+
+```{r}
+# hello world
+# text text
+```
+
+```{r}
+# 
+```
