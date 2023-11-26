@@ -1,0 +1,518 @@
+---
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+# 7.4 Introduction
+
+# 7.4.1 Analysing Spatial Autocorrelation with Moran's I, LISA and friends
+
+# 7.4.2 Data download
+
+```{r}
+library(here)
+library(janitor)
+library(sf)
+library(tidyverse)
+```
+
+```{r}
+# read the ward data in
+LondonWards <- st_read(here::here("week7",
+                                  "week07data",
+                                  "London-wards-2018","London-wards-2018_ESRI","London_Ward.shp"
+                                  ))
+```
+
+```{r}
+LondonWardsMerged <- st_read(here::here("week7",
+                                  "week07data",
+                                  "London-wards-2018",
+                                  "London-wards-2018_ESRI",
+                                  "London_Ward_CityMerged.shp"))%>%
+  st_transform(.,27700)
+```
+
+```{r}
+wardData <- read_csv(here::here("week7",
+                                  "week07data",
+                                "ward-profiles-excel-version.csv"), 
+                     locale = locale(encoding = 'latin1'),
+                     na=c("NA","n/a"))%>%
+  clean_names()
+```
+
+```{r}
+LondonWardsMerged <- LondonWardsMerged %>%
+  left_join(wardData,
+            by=c("GSS_CODE"="new_code"))%>%
+  dplyr::distinct(GSS_CODE,.keep_all=T)%>%
+  dplyr::select(GSS_CODE, ward_name,average_gcse_capped_point_scores_2014)
+# dplyr::distinct(GSS_CODE, .keep_all = T): This line uses the distinct function to keep only unique rows based on the "GSS_CODE" column. 
+# The .keep_all = T argument ensures that all columns are retained for the distinct rows.
+# dplyr::select() : selects specific columns 
+```
+
+```{r}
+# Checking the projection system
+st_crs(LondonWardsMerged)
+```
+
+```{r}
+library(tmap)
+
+BluePlaques <- st_read(here::here("Week6","week06data", 
+                                  "open-plaques-london-2018-04-08.geojson"
+                                  )) %>%
+  st_transform(.,27700)
+```
+
+```{r}
+tmap_mode("plot")
+tm_shape(LondonWardsMerged)+
+  tm_polygons(col = NA, alpha = 0.5)+
+  tm_shape(BluePlaques)+
+  tm_dots(col="blue")
+```
+# 7.5 Data cleaning
+```{r}
+summary(BluePlaques)
+```
+
+```{r}
+# some points are located in outside of london, so need to cleaning the data
+BluePlaquesSub <- BluePlaques[LondonWardsMerged,]
+tm_shape(LondonWardsMerged)+
+  tm_polygons(col=NA,alpha = 0.5)+
+  tm_shape(BluePlaquesSub)+
+  tm_dots(col="blue")
+```
+# 7.6 Data manipulation
+## exmaple1: st_inetrsects(polygon,point)
+```{r}
+# To create a continuous observation from the blue plaques data
+# to count all of the blue plaques that fall within each Ward in the City.
+# Using st_intersects() function from the sf package
+
+example <- st_intersects(LondonWardsMerged,BluePlaquesSub)
+
+example
+```
+## exmaple2: st_join() and filter
+```{r}
+check_example <- LondonWardsMerged %>%
+  st_join(BluePlaquesSub)%>%
+# Performs a spatial join using the st_join function. It joins the LondonWardsMerged data frame with the BluePlaquesSub spatial dataset based on their spatial relationships.
+  filter(ward_name=="Kingston upon Thames - Coombe Hill")
+# Choosing the data of Kingston upon Thames - Coombe Hill
+```
+
+## calculating the number of intersection in each ward
+
+```{r}
+library(sf)
+point_sf_joined <- LondonWardsMerged%>%
+  mutate(n=lengths(st_intersects(.,BluePlaquesSub)))%>%
+  janitor::clean_names()
+
+# 'lengths' This variable represents the number of intersections between each geometry in LondonWardsMerged and the geometries in the BluePlaquesSub dataset. 
+# lengths() is a function in R that is used to get the lengths of elements in a list-like object. #  lengths() is then used to get the number of intersections for each row.
+
+# janitor::clean_names() to lowercase/ replace spaces with underscores...
+```
+
+## calculating area (面积) and density and select the variables
+
+```{r}
+
+# calculate area 
+# The st_area() function is used to calculate the area of each geometry in the spatial data frame. 
+points_sf_joined <- point_sf_joined %>%
+  mutate(area=st_area(.)) %>%
+# then density of the points per ward
+  mutate(density=n/area) %>%
+# select density andd some other variables
+  dplyr::select(density, ward_name, gss_code, n, average_gcse_capped_point_scores_2014)
+```
+
+## ploting and checking the data
+
+```{r}
+
+points_sf_joined_2<- points_sf_joined %>%                    
+  group_by(gss_code) %>%         
+  summarise(density = first(density),
+          wardname= first(ward_name),
+          plaquecount= first(n))
+# # density = first(density): This extracts the first value of the density variable within each group.
+```
+
+```{r}
+#example of using first() function
+# Create a sample data frame
+#df <- data.frame(
+  #group = c("A", "A", "B", "B", "C", "C"),
+  #value = c(10, 20, 15, 25, 30, 40)
+
+# Use dplyr to group by 'group' and extract the first value of 'value' in each group
+#result <- df %>%
+  #group_by(group) %>%
+  #summarise(first_value = first(value))
+
+# Print the result
+#print(result)
+
+# results:
+# A tibble: 3 × 2
+#  group first_value
+#  <chr>       <dbl>
+#1 A              10
+#2 B              15
+#3 C              30
+```
+
+```{r}
+#mapping
+tm_shape(points_sf_joined_2) +
+  tm_polygons("density",
+              style="jenks",
+              palette="PuOr",
+              midpoint=NA,
+              popup.vars=c("wardname","density"),
+              title="Blue Plaque Density")
+# popup.vars=c("wardname","density"): This specifies the variables to be shown in the pop-up when you click on the map. In this case, it would show the "wardname" and "density." 
+```
+
+# 7.7 Weight matrix
+
+```{r}
+# to calculate Moran'I and any similar statistics 
+# need to define a W spatial weights matrix
+library(spdep)
+```
+
+```{r}
+#First calculate the centroids of all Wards in London
+coordsW <- points_sf_joined%>%
+  st_centroid()%>%
+  st_geometry()
+# st_centroid(): This function calculates the centroid of the geometries in your sf object. The centroid is a point representing the center of mass of the geometry.
+# st_geometry(): This extracts the geometry (in this case, the centroid) from the sf object.
+plot(coordsW,axes=TRUE)
+# The axes=TRUE argument specifies that axes should be drawn on the plot.
+```
+```{r}
+# to generate a spatial weights matrix
+
+# defined by neighboring places(lines,points,both) Usually defined: rook case (move fowards or sidewards), bishops case, queen's case
+
+# Queen's case definition: polygons with a shared edge or a corner will be included in computations for the target polygon
+
+# Alternatively instead of using contiguous relationships you can use distance based relationships.
+```
+
+```{r}
+# reate a neighbours list — which is a list of all the neighbours.
+LWard_nb <- points_sf_joined %>%
+  poly2nb(.,queen = T)
+# using poly2nb() with the argument queen=T saying we want a to use Queens case. 
+```
+
+```{r}
+# summary
+summary(LWard_nb)
+# the average number of neighbours is 5.88
+```
+
+```{r}
+# plot them 
+plot(LWard_nb,st_geometry(coordsW),col="red")
+# plotting the centroids (coordsW) on top of the map represented by LWard_nb. 
+
+#add a map underneath (the base boundary map)
+plot(points_sf_joined$geometry, add =T)
+# The add=T argument indicates that you want to add this layer to the existing plot.
+```
+## 7.7.1 Matrix style
+```{r}
+# create a spatial weight matrix. 
+
+# makes a matrix the size of the number of
+# neighbourhoods The matrix style: 
+# B is the basic binary coding (1/0) 
+# W is row standardised (sums over all links to n) 
+# C is globally standardised(sums over all links to n) 
+# U is equal to C divided by the number of neighbours (sums over all links to unity) 
+# S is the variance-stabilizing coding scheme proposed by Tiefelsdorf et al. 1999, p. 167-168 (sums over all links to n).
+```
+
+```{r}
+# create a spatial weights matrix from these weights
+Lward.lw <- LWard_nb %>%
+  nb2mat(.,style="B") # binary (whether or not)
+# using the nb2mat function to convert a spatial weights matrix to a matrix. 
+
+sum(Lward.lw)
+# The sum(Lward.lw) line is essentially counting the number of non-zero elements in the spatial weights matrix, indicating the number of neighbors each spatial unit has based on the specified spatial relationships.指示每个空间单元基于指定的空间关系具有的邻居数量。
+```
+```{r}
+# In globally standardised (C), all weights are scaled so that the sum of all weights in the matrix is equal to n, the number of observations.
+Lward.lw_C <- LWard_nb %>%
+  nb2mat(.,style="C")
+sum(Lward.lw_C)
+```
+```{r}
+# each spatial weight has a value of x(0.1697051):
+x=633/3730
+print(x)
+```
+```{r}
+# do row standardisation(W)
+# the weights for each observation are scaled so that the sum of weights for each observation is equal to 1.
+# 1 is divided by the sum of the number of neighbours in each row. 
+sum(Lward.lw[2,])
+# row 2 here sums to 3, meaning each weight would be 0.3333 in row 2 only.
+```
+```{r}
+# Row standardization
+# LWard_nb is spatial weights matrix
+Lward.lw_W <- nb2mat(LWard_nb, style="W")
+# This calculates the sum of weights for each row (observation) in the original matrix.
+row_sums <- rowSums(Lward.lw_W)
+# The rowSums() function in R is used to calculate the sum of values across rows in a matrix or a data frame.
+# Perform row standardization
+Lward.lw_W_row_standardized <- Lward.lw_W / row_sums
+```
+# 7.8 Autocorrelation
+```{r}
+# calculate the Moran’s I 
+# Moran’s I requires a spatial weight list type object as opposed to matrix, 
+Lward.list <- LWard_nb %>%
+    nb2listw(., style="C")
+# The nb2listw() function can be used to convert a spatial weights matrix to a list format. 
+# style="C", which indicates global standardization.
+```
+## 7.8.1 Moran’s I
+```{r}
+# have clustered values (close to 1) or dispersed values (close to -1) 
+# will calculate for the densities
+I_LWard_Global_Density <- points_sf_joined_2 %>%
+  # points_sf_joined: The data frame or a spatial object containing the variable of ("density").
+  pull(density)%>%
+  #The pull() function from the dplyr package is used to extract the column named "density" from your data.
+  as.vector()%>%
+  # as.vector(): Converts the extracted column to a vector.
+  moran.test(.,Lward.list)
+  # Performs the Moran's I test for spatial autocorrelation. 
+  # moran.test(the vector of variable,the spatial weights list)
+I_LWard_Global_Density
+
+#results:
+# p-value <0.05 reject the null hypothesis of no spatial autocorrelation. 
+# Moran's I is 0.21317 positive spatial autocorrelation
+# similar values are clustered in space. In other words, neighboring locations tend to have similar values of the "density" variable.
+```
+## 7.8.2 Geary’s C
+```{r}
+GC_LWard_Global_Density <- 
+  points_sf_joined_2 %>%
+  pull(density) %>%
+  as.vector()%>%
+  geary.test(.,Lward.list)
+  
+GC_LWard_Global_Density
+
+# results:
+# 0 < Geary C statistic  (0.78632658) <1 positive spatial autocorrelation 
+#  (remember Geary’s C falls between 0 and 2???）
+```
+## 7.8.3 Getis Ord
+```{r}
+G_LWard_Global_Density <- 
+  points_sf_joined_2 %>%
+  pull(density)%>%
+  as.vector()%>%
+  globalG.test(.,Lward.list)
+
+G_LWard_Global_Density
+
+# results:
+# Scientific notation
+# Global G statistic(0.004732322) > Expectation(0.001582278)
+# High values clustering;（hot spot)
+```
+## 7.8.4 Summary
+## 7.8.5 Local Moran’s I
+```{r}
+# Local Moran’s I is:
+# The difference between a value and neighbours * the sum of differences between neighbours and the mean
+# Where the the difference between a value and neighbours is divided by the standard deviation (how much values in neighbourhood vary about the mean)
+
+# Z score (standard deviation)
+# how many standard deviations a value is away (above or below) from the mean. 
+# z>1.65时呈现聚集分布，
+# z<-1.65时呈现离散分布，
+# z值在-1.65 ~ 1.65之间时，呈现随机分布。（注：这里说的1.65是临界值，若z值在-1.65 ~ 1.65之间，说明不存在空间自相关性）
+
+# z-socre(standard deviation),P-value(Probability),Confidence level
+#<-1.65 or >+1.65.  p<0.10   90%
+#<-1.96 or >+1.96.  p<0.05   95%
+#<-2.58 or >+2.58.  p<0.01   99%
+
+# The null hypothesis is always there is complete spatial randomness.
+```
+```{r}
+# use the localmoran function to generate I for each ward in the city
+I_LWard_Local_count <- points_sf_joined_2 %>%
+  pull(plaquecount)%>%
+  as.vector()%>%
+  localmoran(.,Lward.list)%>%
+  as_tibble()
+
+I_LWard_Local_Density <- points_sf_joined_2 %>%
+  pull(density)%>%
+  as.vector()%>%
+  localmoran(.,Lward.list)%>%
+  as_tibble()
+  
+# as_tibble() is a function from the tibble package in R that converts an existing object (like a data frame or matrix) into a tibble. (tidyverse package)
+
+#what does the output (the localMoran object) look like?
+slice_head(I_LWard_Local_Density, n=5)
+# The slice_head() function is a part of the dplyr package 
+# it's used to select the first few rows of a data frame or tibble.
+
+```
+```{r}
+# copy some of the columns (the I score (column 1) and the z-score standard deviation (column 4)) back into the LondonWards spatialPolygonsDataframe
+points_sf_joined_new <- points_sf_joined_2 %>%
+  mutate(plaque_count_I= as.numeric(I_LWard_Local_count$Ii))%>%
+  mutate(plaque_count_Iz= as.numeric(I_LWard_Local_count$Z.Ii))%>%
+  mutate(density_I =as.numeric(I_LWard_Local_Density$Ii))%>%
+  mutate(density_Iz =as.numeric(I_LWard_Local_Density$Z.Ii))
+```
+## 7.8.5.1 Mapping
+```{r}
+# first: set the breaks with Confidence level 
+breaks1<-c(-1000,-2.58,-1.96,-1.65,1.65,1.96,2.58,1000)
+```
+
+```{r}
+# create a new diverging colour brewer palette and reverse the order using rev() (reverse)
+library(RColorBrewer)
+MoranColours<- rev(brewer.pal(8, "RdGy"))
+
+# brewer.pal() is a function in R that is part of the RColorBrewer package. This function is used to generate color palettes that are specifically designed for thematic mapping. 
+```
+
+```{r}
+tm_shape(points_sf_joined_new)+
+  tm_polygons("plaque_count_Iz",
+              style="fixed",
+              breaks=breaks1,
+              palette= MoranColours,
+              midpoint = NA,
+              title = "Local Moran's I, Blue Plaques in London")
+# style="fixed": Sets the style to "fixed," indicating that you are specifying fixed breaks for the color palette.
+# midpoint=NA: Indicates that there is no specific midpoint for the color scale.
+
+#This map shows some areas in the centre of London that have relatively high scores, indicating areas with lots of blue plaques neighbouring other areas with lots of blue plaques.
+```
+## 7.8.6 Local Getis Ord G∗i
+```{r}
+# for hot and cold spots
+# z-scores: how many standard deviations a value (our value) is away (above or below) from the mean (of the expected values)
+
+# Local Getis Ord G∗i: the local sum (of the neighbourhood) compared to the sum of all features
+
+# The result of Getis Ord G∗ianalysis is an array of Z-scores, one for each pixel [or polygon]
+# High Z-scores indicate more intense clustering of high pixel values, indicating hot spots. 
+# Low Z-scores indicate more intense clustering of low values, indicating cold spots.
+```
+```{r}
+# calculate by Local G* 
+Gi_LWard_Local_Density <- points_sf_joined_2 %>%
+  pull(density) %>%
+  as.vector()%>%
+  localG(., Lward.list)
+# check
+head(Gi_LWard_Local_Density)
+```
+```{r}
+# increase the column to points_sf_joined_new
+points_sf_joined_new <- points_sf_joined_new %>%
+  mutate(density_G = as.numeric(Gi_LWard_Local_Density))
+```
+```{r}
+GIColours<- rev(brewer.pal(8, "RdBu"))
+# plot on an interactive map
+tm_shape(points_sf_joined_new)+
+  tm_polygons("density_G",
+              style="fixed",
+              breaks = breaks1,
+              palette= GIColours,
+              midpoint= NA,
+              title = "Gi*, Blue Plaques in London")
+```
+# 7.9 Other variables
+```{r}
+# look at Average GSCE scores
+#use head to see what other variables are in the data file
+
+slice_head(points_sf_joined, n=2)
+```
+```{r}
+# Or print out the class of each column like we did in week 2, although we need to drop the geometry.
+Datatypelist <- LondonWardsMerged %>% 
+  st_drop_geometry()%>%
+  summarise_all(class)%>%
+  pivot_longer(everything(),
+               names_to = "All_variables",
+               values_to = "Variable_class")
+Datatypelist
+
+````
+
+```{r}
+# Local moran'I GSSE
+I_LWard_Local_GCSE <- LondonWardsMerged %>%
+  arrange(GSS_CODE)%>% # arrange(GSS_CODE) sorts the rows of the data frame based on the values in the GSS_CODE column in ascending order.
+  pull(average_gcse_capped_point_scores_2014) %>%
+  as.vector()%>%
+  localmoran(.,Lward.list)%>%
+  as_tibble()
+
+points_sf_joined <- points_sf_joined %>%
+  arrange(gss_code)%>%
+  mutate(GCSE_LocIz = as.numeric(I_LWard_Local_GCSE$Z.Ii))
+
+tm_shape(points_sf_joined) +
+    tm_polygons("GCSE_LocIz",
+        style="fixed",
+        breaks=breaks1,
+        palette=MoranColours,
+        midpoint=NA,
+        title="Local Moran's I, GCSE Scores")
+```
+
+```{r}
+# Gi* GSSE
+G_LWard_Local_GCSE <- LondonWardsMerged %>%
+  dplyr::arrange(GSS_CODE)%>%
+  dplyr::pull(average_gcse_capped_point_scores_2014) %>%
+  as.vector()%>%
+  localmoran(.,Lward.list)%>%
+  as_tibble()
+
+points_sf_joined <- points_sf_joined %>%
+  dplyr::arrange(gss_code)%>%
+  dplyr::mutate(GCSE_LocGiz = as.numeric(G_LWard_Local_GCSE))
+
+tm_shape(points_sf_joined) +
+    tm_polygons("GCSE_LocGiz",
+        style="fixed",
+        breaks=breaks1,
+        palette=GIColours,
+        midpoint=NA,
+        title="Gi*, GCSE Scores")

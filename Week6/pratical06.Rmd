@@ -612,3 +612,4 @@ autoplot.OpenStreetMap(basemap_bng)+
 # the autoplot.OpenStreetMap() function from the OpenStreetMap package in R to create a plot of an OpenStreetMap basemap that has been reprojected to the British National Grid.
 ```
 ##6.8 Point pattern analysis summary
+
